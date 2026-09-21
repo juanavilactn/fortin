@@ -1,4 +1,4 @@
-# Fortin
+# <img src="assets/icon.png" alt="Fortin" width="48" height="48"> Fortin
 
 Fortin is a menu bar application and a command line tool that connects to a FortiClient SSL VPN
 gateway. It completes the Microsoft sign-in (SAML with Entra ID) in a real Chrome window, keeps the
