@@ -7,6 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -253,6 +254,66 @@ test('logsRecent reads the log file the session points at', async () => {
   assert.deepEqual(recent.lines, ['second line', 'third line']);
   assert.equal(recent.total, 3);
   assert.equal(recent.truncated, true);
+});
+
+test('logsRecent follows another process without replaying the history', () => {
+  const { session } = makeSession();
+  const latest = path.join(getPaths().logsDir, 'latest.log');
+  fs.mkdirSync(path.dirname(latest), { recursive: true });
+  fs.writeFileSync(latest, 'previous connection\n');
+
+  const initial = session.logsRecent();
+  assert.deepEqual(initial.lines, ['previous connection']);
+  assert.ok(initial.cursor, 'the GUI needs a position from which to follow the file');
+  assert.deepEqual(session.logsRecent({ cursor: initial.cursor }).lines, []);
+
+  const writer = spawnSync(process.execPath, ['-e',
+    "require('node:fs').appendFileSync(process.argv[1], 'Configuration saved\\nConfiguration saved\\n')",
+    latest,
+  ], { encoding: 'utf8' });
+  assert.equal(writer.status, 0, writer.stderr);
+  const appended = session.logsRecent({ cursor: initial.cursor });
+  assert.deepEqual(appended.lines, ['Configuration saved', 'Configuration saved']);
+  assert.equal(appended.total, 3);
+  assert.deepEqual(session.logsRecent({ cursor: appended.cursor }).lines, []);
+});
+
+test('logsRecent waits for a complete UTF-8 line before advancing its cursor', () => {
+  const { session } = makeSession();
+  const latest = path.join(getPaths().logsDir, 'latest.log');
+  fs.mkdirSync(path.dirname(latest), { recursive: true });
+  fs.writeFileSync(latest, '');
+  const initial = session.logsRecent();
+  const entry = Buffer.from('Conexión completada\n');
+  const split = Buffer.from('Conexi').length + 1;
+  fs.appendFileSync(latest, entry.subarray(0, split));
+  const pending = session.logsRecent({ cursor: initial.cursor });
+  assert.deepEqual(pending.lines, []);
+  assert.equal(pending.cursor.offset, 0);
+
+  fs.appendFileSync(latest, entry.subarray(split));
+  const complete = session.logsRecent({ cursor: pending.cursor });
+  assert.deepEqual(complete.lines, ['Conexión completada']);
+  assert.equal(complete.cursor.offset, entry.length);
+});
+
+test('logsRecent recovers when the followed file is replaced or truncated', () => {
+  const { session } = makeSession();
+  const latest = path.join(getPaths().logsDir, 'latest.log');
+  fs.mkdirSync(path.dirname(latest), { recursive: true });
+  fs.writeFileSync(latest, 'old connection\n');
+  const initial = session.logsRecent();
+  const replacement = path.join(getPaths().logsDir, 'replacement.log');
+  fs.writeFileSync(replacement, 'new connection\n');
+  fs.renameSync(replacement, latest);
+  const replaced = session.logsRecent({ cursor: initial.cursor });
+  assert.deepEqual(replaced.lines, ['new connection']);
+  assert.equal(replaced.reset, true);
+
+  fs.writeFileSync(latest, 'reset\n');
+  const truncated = session.logsRecent({ cursor: replaced.cursor });
+  assert.deepEqual(truncated.lines, ['reset']);
+  assert.equal(truncated.reset, true);
 });
 
 test('requestCredentials fails without a listener and resolves through answerCredentials', async () => {

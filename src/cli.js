@@ -280,10 +280,10 @@ function field(label, value) {
 /* ------------------------------------------------------------------- commands */
 
 async function stopCommand() {
-  const { session, logger, provider } = createSession();
+  const { session, logger, provider } = createSession({ toFile: true });
   await session.start({ poll: false });
 
-  say('Stopping VPN...');
+  logger.log('Stopping VPN...');
   // Reconcile first: the tunnel may have been opened by another process, and
   // then this fresh session still believes it is disconnected.
   await session.refreshStatus();
@@ -313,7 +313,7 @@ async function stopCommand() {
   if (pid && isProcessRunning(pid)) {
     try {
       process.kill(pid, 'SIGTERM');
-      say(`Stopped background process (PID: ${pid})`);
+      logger.log(`Stopped background process (PID: ${pid})`);
     } catch {
       // El proceso ya habia terminado.
     }
@@ -322,7 +322,7 @@ async function stopCommand() {
 
   const snapshot = session.snapshot();
   const running = await provider.isVpnRunning().catch(() => false);
-  say('VPN disconnected');
+  logger.log('VPN disconnected');
   emitResult('stop', { ...snapshot, running });
   process.exitCode = 0;
   logger.dispose();
@@ -390,7 +390,7 @@ async function watchCommand(args) {
 }
 
 async function setupCommand(args) {
-  const { session, logger, provider } = createSession();
+  const { session, logger, provider } = createSession({ toFile: true });
   await session.start({ poll: false });
 
   say(`Installing the privileged helper (${provider.id})...`);
@@ -446,7 +446,7 @@ async function setupStatusCommand() {
 }
 
 async function setupCompleteCommand(args, { command }) {
-  const { session, logger } = createSession();
+  const { session, logger } = createSession({ toFile: true });
   await session.start({ poll: false });
   const status = await session.setupComplete();
 
@@ -457,7 +457,7 @@ async function setupCompleteCommand(args, { command }) {
 }
 
 async function setupSkipCommand(args, { command }) {
-  const { session, logger } = createSession();
+  const { session, logger } = createSession({ toFile: true });
   await session.start({ poll: false });
   const status = await session.setupSkip();
 
@@ -468,7 +468,7 @@ async function setupSkipCommand(args, { command }) {
 }
 
 async function setupResetCommand(args, { command }) {
-  const { session, logger } = createSession();
+  const { session, logger } = createSession({ toFile: true });
   await session.start({ poll: false });
   const status = await session.setupReset();
 
@@ -654,7 +654,7 @@ async function configSetCommand(args, { command }) {
     }
   }
 
-  const { session, logger } = createSession();
+  const { session, logger } = createSession({ toFile: true });
   await session.start({ poll: false });
   const result = session.configSave(patch);
 
@@ -704,7 +704,7 @@ async function secretsSetCommand(args, { command }) {
     return;
   }
 
-  const { session, logger } = createSession();
+  const { session, logger } = createSession({ toFile: true });
   await session.start({ poll: false });
 
   const value = await promptSecret(`Value for ${name} (hidden): `);
@@ -716,7 +716,7 @@ async function secretsSetCommand(args, { command }) {
   }
 
   const where = result.items.find((item) => item.name === name)?.where ?? 'store';
-  say(`${result.label} stored in ${where === 'store' ? result.store.label : 'the configuration file (mode 0600, not protected by the system)'}`);
+  logger.log(`${result.label} stored in ${where === 'store' ? result.store.label : 'the configuration file (mode 0600, not protected by the system)'}`);
 
   emitResult(command, result);
   process.exitCode = 0;
@@ -730,7 +730,7 @@ async function secretsDeleteCommand(args, { command }) {
     return;
   }
 
-  const { session, logger } = createSession();
+  const { session, logger } = createSession({ toFile: true });
   await session.start({ poll: false });
   const result = session.secretDelete(name);
 
@@ -740,7 +740,7 @@ async function secretsDeleteCommand(args, { command }) {
     return;
   }
 
-  say(result.deleted ? `${result.label} deleted` : `${result.label} was not stored`);
+  logger.log(result.deleted ? `${result.label} deleted` : `${result.label} was not stored`);
   emitResult(command, result);
   process.exitCode = 0;
   logger.dispose();
@@ -748,17 +748,17 @@ async function secretsDeleteCommand(args, { command }) {
 
 /* ---------------------------------------------------------------- login item */
 
-function loginItemLines(result) {
+function loginItemLines(result, write = say) {
   if (result.enabled) {
-    say(`Start at login: enabled (${result.mechanism}${result.target ? `, ${result.target}` : ''})`);
+    write(`Start at login: enabled (${result.mechanism}${result.target ? `, ${result.target}` : ''})`);
   } else if (result.reason === 'no-application') {
-    say('Start at login: not registered. No packaged application was found to start at login.');
+    write('Start at login: not registered. No packaged application was found to start at login.');
   } else if (result.reason === 'not-authorized') {
-    say('Start at login: not registered. This run cannot write the login item.');
+    write('Start at login: not registered. This run cannot write the login item.');
   } else if (result.reason === 'unsupported') {
-    say('Start at login: not available on this platform.');
+    write('Start at login: not available on this platform.');
   } else {
-    say('Start at login: disabled');
+    write('Start at login: disabled');
   }
   if (result.ok === false && result.message) warn(result.message);
 }
@@ -779,11 +779,11 @@ async function loginItemStatusCommand() {
 }
 
 async function loginItemSetCommand(enabled, { command }) {
-  const { session, logger } = createSession();
+  const { session, logger } = createSession({ toFile: true });
   await session.start({ poll: false });
   const result = session.loginItemSet(enabled);
 
-  loginItemLines(result);
+  loginItemLines(result, (line) => logger.log(line));
   emitResult(command, result);
   process.exitCode = result.ok ? 0 : 1;
   logger.dispose();
@@ -848,7 +848,7 @@ async function startCommand(args) {
   }
 
   const backgroundMode = !foregroundMode;
-  const { session, logger } = createSession({ toFile: backgroundMode, owner: 'detached' });
+  const { session, logger } = createSession({ toFile: true, owner: 'detached' });
 
   // The migration and the fresh read of the configuration happen first, so what
   // this command was told on the command line is not overwritten by the file.

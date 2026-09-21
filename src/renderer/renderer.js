@@ -4,6 +4,8 @@
 // through the bridge that the preload script exposes as "window.vpn". No
 // framework and no bundler: DOM APIs and that bridge only.
 
+import { createLogFeed } from './log-feed.js';
+
 /* ---------------------------------------------------------------- constants */
 
 const STATE_INFO = {
@@ -365,10 +367,11 @@ function updateLogStatus() {
   el.logStatus.textContent = levelCounts[logFilter] + ' of ' + total + ' shown';
 }
 
-function appendLine(level, time, message) {
+function appendLine(level, time, message, persisted) {
   const line = document.createElement('div');
   line.className = 'log-line log-line--' + level;
   line.dataset.level = level;
+  if (persisted) line.dataset.source = 'file';
 
   const stamp = document.createElement('span');
   stamp.className = 'log-line__time';
@@ -391,15 +394,16 @@ function appendLine(level, time, message) {
   updateLogStatus();
 }
 
-function logLine(line) {
+function logLine(line, { persisted = false } = {}) {
   const source = typeof line === 'string' ? parseFileLine(line) : line ?? {};
   const message = textOf(source.message);
   // The logger writes empty lines as separators; they carry no information.
   if (message === '') return;
-  appendLine(normaliseLevel(source.level), formatTime(source.time), message);
+  appendLine(normaliseLevel(source.level), formatTime(source.time), message, persisted);
 }
 
 function clearLog() {
+  logFeed.clear();
   el.logOutput.replaceChildren();
   levelCounts.info = 0;
   levelCounts.warning = 0;
@@ -408,6 +412,27 @@ function clearLog() {
   updateLatestButton();
   updateLogStatus();
 }
+
+function resetFileLog() {
+  for (const line of [...el.logOutput.children]) {
+    if (line.dataset.source !== 'file') continue;
+    const level = normaliseLevel(line.dataset.level);
+    levelCounts[level] = Math.max(0, levelCounts[level] - 1);
+    line.remove();
+  }
+  updateLatestButton();
+  updateLogStatus();
+}
+
+const logFeed = createLogFeed({
+  read: (options) => callApi(api.recentLogs, options),
+  onLines: (lines) => lines.forEach((line) => logLine(line, { persisted: true })),
+  onReset: resetFileLog,
+  onError: (error) => logLine({
+    level: 'error', message: 'Could not read the recent log lines: ' + errorText(error),
+  }),
+  lines: LOG_LINE_LIMIT,
+});
 
 function setFilter(level) {
   logFilter = LEVELS.includes(level) ? level : 'all';
@@ -1782,6 +1807,7 @@ function clearFieldError(input) {
 }
 
 function bindEvents() {
+  window.addEventListener('unload', () => logFeed.stop(), { once: true });
   el.primary.addEventListener('click', () => {
     void toggleConnection();
   });
@@ -1861,7 +1887,6 @@ function subscribeEvents() {
   subscribe('state:changed', (payload) => {
     if (payload && typeof payload === 'object') renderState(payload);
   });
-  subscribe('log:line', (line) => logLine(line));
   subscribe('progress', (event) => renderProgress(event));
   subscribe('credentials:request', (request) => showCredentialsRequest(request));
   subscribe('helper:changed', (status) => {
@@ -1909,15 +1934,6 @@ async function loadHelperStatus() {
   }
 }
 
-async function loadRecentLogs() {
-  try {
-    const payload = await callApi(api.recentLogs, { lines: LOG_LINE_LIMIT });
-    if (Array.isArray(payload?.lines)) payload.lines.forEach((line) => logLine(line));
-  } catch (error) {
-    logLine({ level: 'error', message: 'Could not read the recent log lines: ' + errorText(error) });
-  }
-}
-
 async function start() {
   bindEvents();
   subscribeEvents();
@@ -1932,7 +1948,7 @@ async function start() {
     loadAppInfo(),
     loadConfig(),
     loadHelperStatus(),
-    loadRecentLogs(),
+    logFeed.start(),
     refreshState().catch(() => {}),
     loadSetup({ open: true }),
   ]);

@@ -164,6 +164,61 @@ test('config set writes the value and keeps every secret out of the file', () =>
   assert.equal(fs.statSync(box.configFile).mode & 0o777, 0o600);
 });
 
+test('configuration and setup commands append activity visible to a later CLI process', () => {
+  const box = sandbox();
+
+  jsonOf(runCli(box, ['config', 'set', 'vpnPort', '8443', '--json']));
+  const first = jsonOf(runCli(box, ['logs', '--json'])).result;
+  assert.ok(first.lines.some((line) => line.endsWith('Configuration saved')));
+
+  jsonOf(runCli(box, ['setup', 'skip', '--json']));
+  jsonOf(runCli(box, ['config', 'set', 'authMethod', 'totp', '--json']));
+  const recent = jsonOf(runCli(box, ['logs', '--json'])).result;
+
+  assert.deepEqual(recent.lines.slice(0, first.lines.length), first.lines, 'another command preserves earlier activity');
+  assert.equal(recent.lines.filter((line) => line.endsWith('Configuration saved')).length, 2);
+  assert.ok(recent.lines.some((line) => line.endsWith('Initial setup postponed')));
+});
+
+test('secret changes persist activity without storing the secret values in the log', () => {
+  const box = sandbox();
+  const password = 'activity-test-password';
+  const totpSecret = 'activity-test-totp';
+
+  jsonOf(runCli(box, ['secrets', 'set', 'password', '--json'], { input: password }));
+  jsonOf(runCli(box, ['secrets', 'set', 'totpSecret', '--json'], { input: totpSecret }));
+  jsonOf(runCli(box, ['secrets', 'delete', 'password', '--json']));
+  const recent = jsonOf(runCli(box, ['logs', '--json'])).result;
+  const text = recent.lines.join('\n');
+
+  assert.match(text, /password stored in the fake secret store/);
+  assert.match(text, /TOTP secret stored in the fake secret store/);
+  assert.match(text, /password deleted/);
+  assert.equal(text.includes(password), false, 'the password never enters activity');
+  assert.equal(text.includes(totpSecret), false, 'the TOTP secret never enters activity');
+});
+
+test('read-only commands leave activity untouched and do not create an empty log', () => {
+  const box = sandbox();
+  const commands = [
+    ['status'], ['config', 'get'], ['secrets', 'status'], ['helper', 'status'],
+    ['setup', 'status'], ['login-item', 'status'], ['info'], ['version'], ['doctor'],
+  ];
+
+  for (const args of commands) jsonOf(runCli(box, [...args, '--json']));
+  assert.equal(fs.existsSync(path.join(box.home, '.fortin', 'logs')), false);
+
+  const missing = runCli(box, ['logs', '--json']);
+  assert.equal(JSON.parse(missing.stdout).ok, false);
+  assert.equal(fs.existsSync(path.join(box.home, '.fortin', 'logs')), false);
+
+  jsonOf(runCli(box, ['config', 'set', 'vpnPort', '8443', '--json']));
+  const before = jsonOf(runCli(box, ['logs', '--json'])).result.lines;
+  for (const args of commands) jsonOf(runCli(box, [...args, '--json']));
+  const after = jsonOf(runCli(box, ['logs', '--json'])).result.lines;
+  assert.deepEqual(after, before, 'status checks do not replace or append to activity');
+});
+
 test('secrets set reads the value from the standard input, status reports it and delete removes it', () => {
   const box = sandbox();
 
@@ -252,6 +307,23 @@ test('login-item status, enable and disable answer with what they applied', () =
   const disabled = jsonOf(runCli(box, ['login-item', 'disable', '--json']));
   assert.equal(disabled.result.enabled, false);
   assert.equal(fs.existsSync(box.loginItemFile), false);
+
+  const activity = jsonOf(runCli(box, ['logs', '--json'])).result.lines.join('\n');
+  assert.match(activity, /Start at login: enabled/);
+  assert.match(activity, /Start at login: disabled/);
+});
+
+test('setup completion, reset and disconnection append their activity', () => {
+  const box = sandbox();
+
+  jsonOf(runCli(box, ['setup', 'complete', '--json']));
+  jsonOf(runCli(box, ['setup', 'reset', '--json']));
+  jsonOf(runCli(box, ['stop', '--json']));
+  const activity = jsonOf(runCli(box, ['logs', '--json'])).result.lines.join('\n');
+
+  assert.match(activity, /Initial setup completed/);
+  assert.match(activity, /Initial setup decision cleared/);
+  assert.match(activity, /VPN disconnected/);
 });
 
 test('info --json names the application, the provider and the paths in use', () => {

@@ -56,7 +56,7 @@ import {
   saveConfig,
 } from './config.js';
 import { applyLoginItem, loginItemStatus as readLoginItemStatus } from './login-item.js';
-import { Logger } from './logger.js';
+import { Logger, sanitizeLine } from './logger.js';
 import { getProvider } from './platform/index.js';
 import { SECRET_NAMES, deleteSecret, hasSecret, setSecret, storeInfo } from './secrets.js';
 import { SETUP_STEPS, SETUP_VERSION, readSetupFlags, setupDecision, writeSetupFlags } from './setup.js';
@@ -626,7 +626,7 @@ export class VpnSession extends EventEmitter {
           throw new Error('This provider cannot install the helper');
         }
         this.logger.log('Installing the privileged VPN helper...');
-        await this.provider.installHelper({ onLog: (line) => this.emit('log', line), useGui });
+        await this.provider.installHelper({ onLog: (line) => this.logger.log(line), useGui });
         const status = await this.helperStatus();
         this.emit('helper:changed', status);
         this.logger.log(status.ready ? 'Helper ready' : 'Helper installed but not ready yet');
@@ -663,17 +663,44 @@ export class VpnSession extends EventEmitter {
     return latest;
   }
 
-  /** Last lines of the current log file, as the activity panel reads them. */
-  logsRecent({ lines } = {}) {
+  /** Recent history, or complete lines appended since the caller's last read. */
+  logsRecent({ lines, cursor } = {}) {
     const requested = Number(lines) || LOGS_RECENT_DEFAULT;
     const limit = Math.min(Math.max(requested, 1), LOGS_RECENT_MAX);
     const file = this.logFilePath();
 
+    let descriptor;
     try {
-      const all = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-      if (all.length > 0 && all[all.length - 1] === '') all.pop();
-      const tail = all.slice(-limit);
-      return { ok: true, path: file, lines: tail, total: all.length, truncated: all.length > tail.length };
+      descriptor = fs.openSync(file, 'r');
+      const stat = fs.fstatSync(descriptor);
+      const identity = `${stat.dev}:${stat.ino}`;
+      const resume = cursor?.file === file && cursor.identity === identity
+        && Number.isSafeInteger(cursor.offset) && cursor.offset >= 0 && cursor.offset <= stat.size
+        && Number.isSafeInteger(cursor.total) && cursor.total >= 0;
+      const offset = resume ? cursor.offset : 0;
+      const buffer = Buffer.alloc(stat.size - offset);
+      let read = 0;
+      while (read < buffer.length) {
+        const count = fs.readSync(descriptor, buffer, read, buffer.length - read, offset + read);
+        if (count === 0) break;
+        read += count;
+      }
+
+      // Keep an unfinished line for the next read, including incomplete UTF-8.
+      const completeBytes = buffer.subarray(0, read).lastIndexOf(10) + 1;
+      const entries = completeBytes === 0 ? []
+        : buffer.subarray(0, completeBytes).toString('utf8').split(/\r?\n/).slice(0, -1);
+      const recent = entries.slice(-limit).map(sanitizeLine);
+      const total = (resume ? cursor.total : 0) + entries.length;
+      return {
+        ok: true,
+        path: file,
+        lines: recent,
+        total,
+        truncated: entries.length > recent.length,
+        reset: Boolean(cursor) && !resume,
+        cursor: { file, identity, offset: offset + completeBytes, total },
+      };
     } catch (error) {
       return {
         ok: false,
@@ -683,6 +710,8 @@ export class VpnSession extends EventEmitter {
         truncated: false,
         message: `Cannot read the log file: ${error?.message ?? error}`,
       };
+    } finally {
+      if (descriptor !== undefined) fs.closeSync(descriptor);
     }
   }
 

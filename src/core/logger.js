@@ -6,6 +6,8 @@ const ANSI_PATTERN = /\u001b\[[0-9;]*[A-Za-z]/g;
 const SECRET_PATTERNS = [
   [/(SVPNCOOKIE\s*=\s*)[^\s;'"]+/gi, '$1***'],
   [/(--cookie=)[^\s'"]+/gi, '$1***'],
+  [/(\bauth_id(?: from URL)?\s*:\s*)[^\s,;]+/gi, '$1***'],
+  [/(\bTOTP(?: code)?\s*[:=]\s*)\d{6,8}\b/gi, '$1***'],
 ];
 
 export function sanitizeLine(message) {
@@ -13,6 +15,9 @@ export function sanitizeLine(message) {
   for (const [pattern, replacement] of SECRET_PATTERNS) {
     clean = clean.replace(pattern, replacement);
   }
+  // Browser URLs can contain SAML assertions, auth IDs and OAuth tokens. The
+  // endpoint identifies the sign-in step without retaining its credentials.
+  clean = clean.replace(/https?:\/\/[^\s"'<>]+/gi, (url) => url.replace(/([?#]).*$/, '$1***'));
   return clean;
 }
 
@@ -32,7 +37,6 @@ function formatArgument(value) {
 
 export class Logger extends EventEmitter {
   #filePath = null;
-  #stream = null;
   #disposed = false;
 
   /**
@@ -66,41 +70,21 @@ export class Logger extends EventEmitter {
 
   dispose() {
     this.#disposed = true;
-    if (this.#stream) {
-      try {
-        this.#stream.end();
-      } catch {
-        // El stream ya estaba cerrado.
-      }
-      this.#stream = null;
-    }
     this.removeAllListeners();
   }
 
   #openLogFile() {
     fs.mkdirSync(this.logDir, { recursive: true, mode: 0o700 });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    this.#filePath = path.join(this.logDir, `vpn-${timestamp}.log`);
-    this.#stream = fs.createWriteStream(this.#filePath, { flags: 'a', mode: 0o600 });
-    this.#refreshLatestLog();
-  }
-
-  #refreshLatestLog() {
+    fs.chmodSync(this.logDir, 0o700);
     const latestLog = path.join(this.logDir, 'latest.log');
+    // Append through the symlink older versions created. Replacing it would
+    // hide that history and split the GUI from an already running CLI process.
+    const file = fs.openSync(latestLog, 'a', 0o600);
     try {
-      fs.unlinkSync(latestLog);
-    } catch {
-      // No habia latest.log previo.
-    }
-    try {
-      // fs.symlinkSync requiere privilegios en Windows, asi que ahi se copia.
-      if (process.platform === 'win32') {
-        fs.copyFileSync(this.#filePath, latestLog);
-      } else {
-        fs.symlinkSync(this.#filePath, latestLog);
-      }
-    } catch {
-      // latest.log solo es una comodidad para el usuario.
+      fs.fchmodSync(file, 0o600);
+      this.#filePath = fs.realpathSync(latestLog);
+    } finally {
+      fs.closeSync(file);
     }
   }
 
@@ -110,9 +94,16 @@ export class Logger extends EventEmitter {
     const message = sanitizeLine(args.map(formatArgument).join(' '));
     const time = new Date().toISOString();
 
-    if (this.#stream) {
+    if (this.#filePath) {
       const prefix = level === 'error' ? `[${time}] [ERROR]` : `[${time}]`;
-      this.#stream.write(`${prefix} ${message}\n`);
+      // One append per record keeps independent processes on the same history.
+      // Synchronous writes also survive a short CLI command's process.exit().
+      const file = fs.openSync(this.#filePath, 'a', 0o600);
+      try {
+        fs.writeSync(file, `${prefix} ${message}\n`);
+      } finally {
+        fs.closeSync(file);
+      }
     }
 
     if (this.mirror !== 'none') {

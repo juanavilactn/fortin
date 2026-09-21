@@ -96,7 +96,9 @@ the application is doing right now: the sign-in step, the push code to approve, 
 in progress. It also has:
 
 - `Connect` and `Disconnect`, and a `Cancel` while an attempt is running.
-- An `Activity` panel with the log, a level filter, `Copy` and `Clear`, and the last 500 lines.
+- An `Activity` panel with the last 500 lines of the shared GUI and CLI log, a level filter,
+  `Copy` and `Clear`. New lines appear while the window is open, including changes made by CLI
+  commands. `Clear` clears the panel; the saved history stays in `~/.fortin/logs/latest.log`.
 - A `Settings` panel with every field of the configuration, validated before saving. A stored
   password or TOTP secret shows empty: leave it empty to keep the stored value.
 - `Install VPN helper`, which appears when the helper is missing or was not authorized.
