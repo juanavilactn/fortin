@@ -34,23 +34,51 @@ sudo rm -rf /usr/local/libexec/fortin /usr/local/libexec/fortin-helper /etc/sudo
 `brew uninstall --cask --zap fortin` also removes the configuration directory and the login item of
 the user.
 
-## Updating the cask after a release
+## Automatic releases and cask updates
 
-The cask names a version and the sha256 of each disk image, and the disk images only exist once the
-release is published. From the checkout of the application:
+The application workflow, [`.github/workflows/tests.yml`](../../.github/workflows/tests.yml),
+publishes when a push to `main` changes `package.json.version` to a stable `X.Y.Z` version. Run
+`npm version patch --no-git-tag-version --ignore-scripts` in the application checkout, or use
+`minor` or `major`, and include both `package.json` and `package-lock.json` in the change.
+
+The `prepare-release` job checks the version change. After the tests pass, the `release` job
+checks for an existing release, builds the macOS Apple Silicon and Intel DMG and ZIP files, creates
+the `vX.Y.Z` tag at the tested commit, and publishes the release only when all four downloads and
+`SHA256SUMS` are uploaded.
+Until then, the release stays a draft. Builds use ad-hoc signing without notarization.
+
+The `homebrew` job downloads both disk images from the public release, runs
+`scripts/update-cask.mjs` to generate `packaging/homebrew/Casks/fortin.rb`, and commits the result
+to `main` in the application repository. It also updates `Casks/fortin.rb` in
+[`juanavilactn/homebrew-tap`](https://github.com/juanavilactn/homebrew-tap). The tap update uses the
+checksums of the published downloads.
+
+## Release setup
+
+Create a dedicated SSH deploy key for `juanavilactn/homebrew-tap` and enable write access. Add
+the public key under that repository's Settings, Deploy keys. Store the private key as the
+`HOMEBREW_TAP_DEPLOY_KEY` Actions secret in `juanavilactn/fortin`. This key is used only to update
+the tap; the application release and its own cask use the workflow's `GITHUB_TOKEN`.
+
+From a private temporary directory, the equivalent CLI setup is:
 
 ```bash
-# 1. bump the version in package.json, then build the two disk images
-npm run dist:mac
-
-# 2. publish the release with those images
-gh release create v1.0.0 dist/Fortin-1.0.0-arm64.dmg dist/Fortin-1.0.0-x64.dmg
-
-# 3. write the version and the real checksums into the cask
-node scripts/update-cask.mjs
-
-# 4. copy the cask into this tap, commit and push
+ssh-keygen -t ed25519 -N '' -C fortin-release-ci -f ./tap-deploy-key
+gh repo deploy-key add ./tap-deploy-key.pub --repo juanavilactn/homebrew-tap \
+  --title 'Fortin release CI' --allow-write
+gh secret set HOMEBREW_TAP_DEPLOY_KEY --repo juanavilactn/fortin < ./tap-deploy-key
 ```
 
-`scripts/update-cask.mjs --check` reports whether the cask still matches the images of the build
-directory, without writing anything.
+Remove the temporary private key after storing it and verifying access. Do not reuse a personal
+SSH key, put the private key in the repository or pass it as a command argument. The workflow
+checks out the tap using this deploy key and pushes only the generated cask, without force.
+
+If the secret is missing, the Homebrew job fails with a message identifying it. The application
+release may already be public. Add the secret and rerun the failed GitHub Actions execution,
+keeping the same version. A retry skips the build and publication for an already public release,
+preserves its assets, and retries the tap update. If the tap already contains the generated cask,
+no new commit is needed. The same applies to the cask in the application repository.
+
+To inspect a cask locally, download both published disk images into `dist/` for the version in
+`package.json`, then run `node scripts/update-cask.mjs --check`. It reports whether the checkout's
+cask matches the downloads without changing it. Omitting `--check` updates the local cask.
