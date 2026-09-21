@@ -1,0 +1,85 @@
+#!/bin/sh
+#
+# Fortin command line tool.
+#
+# Runs src/cli.js of this application with the Electron binary that ships inside
+# it, in Node mode: the same code the window runs, without a window.
+#
+# electron-builder copies this file into the build (electron-builder.yml):
+#
+#   macOS:  <App>.app/Contents/Resources/cli/fortin
+#   Linux:  <application folder>/resources/cli/fortin
+#
+# so the CLI entry sits next to this directory inside the asar archive, and the
+# application folder is two levels up. "fortin cli install" links this
+# file into a directory of the PATH: it is called through that link, and it
+# finds itself again by following it.
+#
+# ELECTRON_RUN_AS_NODE is exported and not only set, so every process the tool
+# starts keeps running as Node.
+
+set -u
+
+self=$0
+while [ -h "$self" ]; do
+  link=$(readlink "$self") || break
+  case $link in
+    /*) self=$link ;;
+    *) self=$(dirname "$self")/$link ;;
+  esac
+done
+
+command_dir=$(cd "$(dirname "$self")" && pwd -P)
+resources_dir=$(dirname "$command_dir")
+app_dir=$(dirname "$resources_dir")
+# The CLI entry lives inside the asar archive. The kernel cannot look inside
+# that file, only the Electron binary can, so the check below is on the archive.
+archive=$resources_dir/app.asar
+entry=$archive/src/cli.js
+
+# Executable of the application. macOS names it in the Info.plist of the bundle;
+# the other platforms keep it in the application folder, next to resources/.
+executable=''
+if [ -f "$app_dir/Info.plist" ] && [ -x /usr/bin/plutil ]; then
+  name=$(/usr/bin/plutil -extract CFBundleExecutable raw -o - "$app_dir/Info.plist" 2>/dev/null || true)
+  if [ -n "$name" ] && [ -x "$app_dir/MacOS/$name" ]; then
+    executable=$app_dir/MacOS/$name
+  fi
+fi
+
+if [ -z "$executable" ] && [ -d "$app_dir/MacOS" ]; then
+  # A bundle without that hint: the executable is the only file of MacOS/.
+  for candidate in "$app_dir"/MacOS/*; do
+    if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+      executable=$candidate
+      break
+    fi
+  done
+fi
+
+if [ -z "$executable" ]; then
+  # Linux and Windows: the executable is the program of the folder itself, so
+  # everything else there is the Chromium runtime of Electron.
+  for candidate in "$app_dir"/*; do
+    if [ ! -f "$candidate" ] || [ ! -x "$candidate" ]; then
+      continue
+    fi
+    case $(basename "$candidate") in
+      chrome-sandbox|chrome_crashpad_handler) continue ;;
+      *.so|*.so.*|*.pak|*.bin|*.dat|*.html|*.json|*.asar|*.desktop|*.png|*.svg) continue ;;
+    esac
+    executable=$candidate
+    break
+  done
+fi
+
+if [ -z "$executable" ] || [ ! -f "$archive" ]; then
+  echo "fortin: cannot find the application this command belongs to" >&2
+  echo "  application: $app_dir" >&2
+  echo "  archive:     $archive" >&2
+  exit 1
+fi
+
+ELECTRON_RUN_AS_NODE=1
+export ELECTRON_RUN_AS_NODE
+exec "$executable" "$entry" "$@"

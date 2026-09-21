@@ -1,0 +1,70 @@
+appId: com.juanavilactn.fortin
+productName: Fortin
+copyright: Copyright (c) 2026 juanavilactn
+
+directories:
+  output: dist
+  buildResources: assets
+
+files:
+  - src/**/*
+  - assets/tray-*.png
+  - package.json
+  - "!**/*.map"
+
+extraResources:
+  - from: resources/helper
+    to: helper
+    filter: ["**/*"]
+  # The command line tool of the bundle: "cli install" links this launcher into
+  # a directory of the PATH, and the launcher runs src/cli.js with the Electron
+  # binary of the application, in Node mode.
+  - from: resources/cli
+    to: cli
+    filter: ["**/*"]
+
+asar: true
+
+mac:
+  category: public.app-category.utilities
+  icon: assets/icon.png
+  artifactName: Fortin-${version}-${arch}.${ext}
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  extendInfo:
+    LSUIElement: false
+    NSAppleEventsUsageDescription: Needed to install the privileged VPN helper.
+
+linux:
+  category: Network
+  icon: assets/icon.png
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+
+win:
+  icon: assets/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+publish:
+  provider: github
+  owner: juanavilactn
+  repo: fortin
+
+# Every packed macOS app leaves the build with a real code signature, so the
+# system accepts its notifications (see scripts/sign-mac.cjs).
+afterPack: scripts/sign-mac.cjs

@@ -1,0 +1,61 @@
+#!/bin/bash
+set -euo pipefail
+
+OPENFORTIVPN='/usr/local/libexec/fortin/openfortivpn'
+
+fail() {
+    printf 'fortin-helper: %s\n' "$1" >&2
+    exit 64
+}
+
+case "${1:-}" in
+    connect)
+        [ "$#" -eq 6 ] || fail 'invalid connect arguments'
+
+        server="$2"
+        port="$3"
+        cookie="$4"
+        trusted_cert="$5"
+        realm="$6"
+
+        [[ "$server" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] || fail 'invalid VPN server'
+        [[ "$port" =~ ^[0-9]+$ ]] || fail 'invalid VPN port'
+        [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || fail 'invalid VPN port'
+        [ -n "$cookie" ] && [ "${#cookie}" -le 16384 ] || fail 'invalid VPN cookie'
+        [[ "$trusted_cert" == 'any' || "$trusted_cert" =~ ^[A-Fa-f0-9]{64}$ ]] || fail 'invalid trusted certificate'
+        [ "${#realm}" -le 256 ] || fail 'invalid VPN realm'
+
+        args=(
+            "${server}:${port}"
+            "--cookie=${cookie}"
+            "--trusted-cert=${trusted_cert}"
+        )
+
+        if [ -n "$realm" ]; then
+            args+=("--realm=${realm}")
+        fi
+
+        exec "$OPENFORTIVPN" "${args[@]}"
+        ;;
+
+    stop)
+        [ "$#" -eq 1 ] || fail 'invalid stop arguments'
+
+        while IFS= read -r pid; do
+            [ -n "$pid" ] || continue
+            command_line="$(/bin/ps -p "$pid" -o command= 2>/dev/null || true)"
+            case "$command_line" in
+                "$OPENFORTIVPN"|"$OPENFORTIVPN "*) /bin/kill -TERM "$pid" ;;
+            esac
+        done < <(/usr/bin/pgrep -x openfortivpn 2>/dev/null || true)
+        ;;
+
+    version)
+        [ "$#" -eq 1 ] || fail 'invalid version arguments'
+        exec "$OPENFORTIVPN" --version
+        ;;
+
+    *)
+        fail 'expected connect, stop, or version'
+        ;;
+esac

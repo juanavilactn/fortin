@@ -1,0 +1,56 @@
+{
+  "name": "fortin",
+  "productName": "Fortin",
+  "version": "1.0.0",
+  "description": "Fortin connects to FortiClient SSL VPN gateways with SAML (Microsoft Entra ID) plus TOTP or push MFA, from a menu bar window or the command line",
+  "author": "juanavilactn",
+  "type": "module",
+  "main": "src/main/main.js",
+  "bin": {
+    "fortin": "src/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juanavilactn/fortin.git"
+  },
+  "homepage": "https://github.com/juanavilactn/fortin",
+  "bugs": {
+    "url": "https://github.com/juanavilactn/fortin/issues"
+  },
+  "keywords": [
+    "forticlient",
+    "fortinet",
+    "vpn",
+    "saml",
+    "sso",
+    "entra-id",
+    "openfortivpn",
+    "totp",
+    "mfa",
+    "electron",
+    "macos",
+    "tray"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "cli": "node src/cli.js",
+    "test": "node --test test/*.test.js",
+    "icons": "node scripts/generate-icons.js",
+    "cask": "node scripts/update-cask.mjs",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "dist:win": "electron-builder --win",
+    "dist:dir": "electron-builder --dir"
+  },
+  "dependencies": {
+    "puppeteer-core": "25.10.0"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.16.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "license": "MIT"
+}

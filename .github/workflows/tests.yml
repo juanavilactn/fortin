@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      # Every action is pinned to the commit of its release, not to a moving
+      # tag: the runner executes exactly this code, and an update is a diff.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # The version package.json declares as the minimum, so the job
+          # proves that floor instead of a moving one.
+          node-version: "22.12.0"
+          cache: npm
+      # The tests run on the doubles of the three platforms, so the Electron
+      # binary is not needed: the lifecycle scripts stay off and the download
+      # of that binary is skipped.
+      - run: npm ci --ignore-scripts
+      - run: npm test

@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'"
+    />
+    <title>Fortin</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header id="status-card" class="status" data-state="disconnected">
+        <div class="status__top">
+          <div class="status__ident">
+            <span id="status-dot" class="status__dot" data-state="disconnected" aria-hidden="true"></span>
+            <h1 class="status__title">Fortin</h1>
+            <span id="status-pill" class="pill" role="status" data-state="disconnected">Disconnected</span>
+          </div>
+          <div class="status__action">
+            <button id="cancel-action" class="button" type="button" hidden>Cancel</button>
+            <button id="primary-action" class="button button--primary" type="button">
+              <span id="primary-spinner" class="spinner" hidden aria-hidden="true"></span>
+              <span id="primary-label">Connect</span>
+            </button>
+          </div>
+        </div>
+        <p id="status-detail" class="status__detail" aria-live="polite">The tunnel is down.</p>
+        <p id="status-hint" class="status__hint" hidden></p>
+        <ul class="meta">
+          <li id="meta-server" class="meta__item">No server configured</li>
+          <li id="meta-timer" class="meta__item meta__item--timer" hidden></li>
+          <li id="meta-awake" class="meta__item" hidden>Keeping this machine awake</li>
+          <li id="meta-reconnect" class="meta__item meta__item--warn" hidden></li>
+        </ul>
+        <div class="status__progress" aria-hidden="true"></div>
+      </header>
+
+      <section id="helper-banner" class="banner" hidden>
+        <p id="helper-message" class="banner__message">The privileged VPN helper is not installed.</p>
+        <button id="helper-install" class="button" type="button">Install VPN helper</button>
+      </section>
+
+      <section id="setup-banner" class="banner" hidden>
+        <p id="setup-banner-message" class="banner__message">The initial setup is not finished.</p>
+        <button id="setup-banner-open" class="button" type="button">Finish setup</button>
+      </section>
+
+      <div id="section-switch" class="switch" role="group" aria-label="Window sections">
+        <button id="tab-activity" class="switch__button" type="button" aria-pressed="true" aria-controls="view-activity">
+          Activity
+        </button>
+        <button id="tab-settings" class="switch__button" type="button" aria-pressed="false" aria-controls="view-settings">
+          Settings
+        </button>
+      </div>
+
+      <section id="view-setup" class="view" aria-label="Initial setup" hidden>
+        <div class="setup__head">
+          <div class="setup__ident">
+            <h2 id="setup-step-title" class="setup__title">Welcome</h2>
+            <span id="setup-step-counter" class="pill">Step 1 of 8</span>
+          </div>
+          <button id="setup-later" class="button" type="button">Later</button>
+        </div>
+
+        <div id="setup-body" class="setup__body">
+          <section id="setup-step-welcome" class="setup-step" hidden>
+            <p class="setup__lead">
+              This assistant configures the minimum this app needs to reach the VPN, in eight short steps. Nothing
+              leaves this machine, and you can postpone it at any time.
+            </p>
+            <ol id="setup-welcome-list" class="setup__list"></ol>
+          </section>
+
+          <section id="setup-step-helper" class="setup-step" hidden>
+            <p class="setup__lead">
+              The tunnel runs through a small privileged helper. Only an administrator can install it, and it is
+              what lets the app open and close the tunnel later without asking for a password again.
+            </p>
+            <p id="setup-helper-pending" class="notice" hidden>
+              The helper is not installed yet. macOS shows its own administrator dialog and asks for your password;
+              the app never sees or stores that password.
+            </p>
+            <p id="setup-helper-ready" class="field__hint" hidden>
+              The helper is ready: this step is already resolved on this machine.
+            </p>
+            <p class="field__row">
+              <button id="setup-helper-install" class="button" type="button">Install VPN helper</button>
+            </p>
+          </section>
+
+          <section id="setup-step-server" class="setup-step" hidden>
+            <p class="setup__lead">
+              These three values come from the VPN profile of FortiClient: the gateway host and the port of the
+              profile settings, and its realm when it names one.
+            </p>
+            <label class="field">
+              <span class="field__label">VPN server</span>
+              <input
+                id="setup-server"
+                class="field__input"
+                type="text"
+                spellcheck="false"
+                placeholder="vpn.example.com"
+                aria-describedby="setup-help-server setup-error-server"
+              />
+              <span id="setup-help-server" class="field__help">The gateway host of the profile, without https:// and without a path.</span>
+              <span id="setup-error-server" class="field__error" role="alert" hidden></span>
+            </label>
+            <label class="field">
+              <span class="field__label">Port</span>
+              <input
+                id="setup-port"
+                class="field__input"
+                type="number"
+                min="1"
+                max="65535"
+                step="1"
+                inputmode="numeric"
+                placeholder="443"
+                aria-describedby="setup-help-port setup-error-port"
+              />
+              <span id="setup-help-port" class="field__help">Usually 443, the port the same profile connects to.</span>
+              <span id="setup-error-port" class="field__error" role="alert" hidden></span>
+            </label>
+            <label class="field">
+              <span class="field__label">Realm</span>
+              <input
+                id="setup-realm"
+                class="field__input"
+                type="text"
+                spellcheck="false"
+                placeholder="Optional"
+                aria-describedby="setup-help-realm"
+              />
+              <span id="setup-help-realm" class="field__help">Only when the gateway asks for a realm or group. Leave it empty otherwise.</span>
+            </label>
+          </section>
+
+          <section id="setup-step-authentication" class="setup-step" hidden>
+            <p class="setup__lead">
+              The app signs in to Microsoft Entra ID in a browser, with the same account you use for Office.
+            </p>
+            <label class="field">
+              <span class="field__label">Microsoft account</span>
+              <input
+                id="setup-username"
+                class="field__input"
+                type="text"
+                spellcheck="false"
+                autocomplete="username"
+                placeholder="user@example.com"
+                aria-describedby="setup-help-username setup-error-username"
+              />
+              <span id="setup-help-username" class="field__help">The email of the account, as you type it in the Microsoft sign-in.</span>
+              <span id="setup-error-username" class="field__error" role="alert" hidden></span>
+            </label>
+            <fieldset class="subgroup">
+              <legend class="field__label">Authentication method</legend>
+              <label class="choice">
+                <input id="setup-auth-push" type="radio" name="setup-auth-method" value="push" />
+                <span>Push notification: approve it on the phone (default)</span>
+              </label>
+              <label class="choice">
+                <input id="setup-auth-totp" type="radio" name="setup-auth-method" value="totp" />
+                <span>TOTP code: the app generates it from a secret</span>
+              </label>
+            </fieldset>
+            <label id="setup-totp-field" class="field" hidden>
+              <span class="field__label">TOTP secret</span>
+              <input
+                id="setup-totp"
+                class="field__input"
+                type="password"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="Leave empty to keep the stored secret"
+                aria-describedby="setup-help-totp setup-error-totp"
+              />
+              <span id="setup-help-totp" class="field__help">The base32 secret behind the authenticator entry, the one the setup code shows.</span>
+              <span id="setup-totp-hint" class="field__hint" hidden>&#8226;&#8226;&#8226;&#8226;&#8226; (saved)</span>
+              <span id="setup-error-totp" class="field__error" role="alert" hidden></span>
+            </label>
+          </section>
+
+          <section id="setup-step-secrets" class="setup-step" hidden>
+            <p class="setup__lead">
+              The password is the Microsoft password of that account, and the TOTP secret of the previous step is kept
+              the same way. Both stay on this machine: the app writes them to the system store, never to a log, and
+              never shows them again.
+            </p>
+            <label class="field">
+              <span class="field__label">Password</span>
+              <input
+                id="setup-password"
+                class="field__input"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Leave empty to type it when connecting"
+                aria-describedby="setup-help-password"
+              />
+              <span id="setup-help-password" class="field__help">Empty is fine: the app asks for it in a window when the sign-in needs it.</span>
+              <span id="setup-password-hint" class="field__hint" hidden>&#8226;&#8226;&#8226;&#8226;&#8226; (saved)</span>
+            </label>
+            <p id="setup-secrets-store" class="notice" role="status" hidden></p>
+          </section>
+
+          <section id="setup-step-tunnel" class="setup-step" hidden>
+            <p class="setup__lead">How the app behaves once it is configured. All three can be changed later in Settings.</p>
+            <label class="choice">
+              <input id="setup-start-at-login" type="checkbox" />
+              <span>Start the app when I log in</span>
+              <span class="choice__help">It waits in the tray without a window, so the tunnel survives a restart.</span>
+            </label>
+            <p id="setup-start-at-login-help" class="notice" hidden>Only the installed application can register itself at login.</p>
+            <label class="choice">
+              <input id="setup-keep-awake" type="checkbox" />
+              <span>Keep this machine awake while connected</span>
+              <span class="choice__help">The screen may sleep, the machine does not, so the tunnel is not cut.</span>
+            </label>
+            <label class="choice">
+              <input id="setup-auto-reconnect" type="checkbox" />
+              <span>Reconnect by itself when the tunnel drops</span>
+              <span class="choice__help">It tries the last session first and then signs in again.</span>
+            </label>
+            <p class="notice">Keeping the machine awake costs battery while the tunnel is up, especially unplugged.</p>
+          </section>
+
+          <section id="setup-step-command" class="setup-step" hidden>
+            <p class="setup__lead">
+              Optional. The application ships a command line tool that runs the same app from a terminal: start,
+              stop, status and doctor. This step links it into a directory of the PATH.
+            </p>
+            <p id="setup-command-status" class="field__help" role="status"></p>
+            <p id="setup-command-admin" class="notice" hidden></p>
+            <p class="field__row">
+              <button id="setup-command-install" class="button" type="button" hidden>Install the command</button>
+            </p>
+          </section>
+
+          <section id="setup-step-summary" class="setup-step" hidden>
+            <p class="setup__lead">This is what the assistant configured:</p>
+            <dl id="setup-summary" class="setup__summary"></dl>
+            <p class="notice">Connect now starts a real connection: the app opens the Microsoft sign-in and brings the tunnel up.</p>
+            <p class="field__row">
+              <button id="setup-finish" class="button" type="button">Finish</button>
+              <button id="setup-connect" class="button button--primary" type="button">Connect now</button>
+            </p>
+          </section>
+        </div>
+
+        <div class="setup__actions">
+          <button id="setup-back" class="button" type="button">Back</button>
+          <span id="setup-message" class="form__message" role="status"></span>
+          <button id="setup-next" class="button button--primary" type="button">Start</button>
+        </div>
+      </section>
+
+      <section id="view-activity" class="view" aria-label="Activity">
+        <div class="toolbar">
+          <div class="chips" role="group" aria-label="Filter by level">
+            <button id="filter-all" class="chip" type="button" data-level="all" aria-pressed="true">All</button>
+            <button id="filter-info" class="chip" type="button" data-level="info" aria-pressed="false">Info</button>
+            <button id="filter-warning" class="chip" type="button" data-level="warning" aria-pressed="false">Warning</button>
+            <button id="filter-error" class="chip" type="button" data-level="error" aria-pressed="false">Error</button>
+          </div>
+          <div class="toolbar__group">
+            <button id="log-copy" class="button button--small" type="button">Copy</button>
+            <button id="logs-open" class="button button--small" type="button">Open log folder</button>
+            <button id="screenshots-open" class="button button--small" type="button">Open screenshots</button>
+            <button id="log-clear" class="button button--small" type="button">Clear</button>
+          </div>
+        </div>
+        <div class="log-wrap">
+          <div id="log-output" class="log" role="log" aria-label="Connection log" tabindex="0"></div>
+          <button id="log-latest" class="button button--small log__latest" type="button" hidden>Jump to latest</button>
+        </div>
+        <p id="log-status" class="view__foot" role="status">No lines yet.</p>
+      </section>
+
+      <section id="view-settings" class="view" aria-label="Settings" hidden>
+        <form id="settings-form" class="form" autocomplete="off" novalidate>
+          <p id="settings-env" class="notice" hidden></p>
+          <p id="settings-secrets-store" class="notice" hidden></p>
+          <div class="groups">
+            <fieldset class="group">
+              <legend class="group__legend">Connection</legend>
+              <label class="field">
+                <span class="field__label">VPN server</span>
+                <input
+                  id="field-server"
+                  class="field__input"
+                  type="text"
+                  spellcheck="false"
+                  placeholder="vpn.example.com"
+                  aria-describedby="help-server error-server"
+                />
+                <span id="help-server" class="field__help">Host name of the VPN gateway.</span>
+                <span id="error-server" class="field__error" role="alert" hidden></span>
+              </label>
+              <label class="field">
+                <span class="field__label">Port</span>
+                <input
+                  id="field-port"
+                  class="field__input"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  step="1"
+                  inputmode="numeric"
+                  placeholder="443"
+                  aria-describedby="help-port error-port"
+                />
+                <span id="help-port" class="field__help">Usually 443.</span>
+                <span id="error-port" class="field__error" role="alert" hidden></span>
+              </label>
+              <label class="field">
+                <span class="field__label">Realm</span>
+                <input
+                  id="field-realm"
+                  class="field__input"
+                  type="text"
+                  spellcheck="false"
+                  placeholder="Optional"
+                  aria-describedby="help-realm"
+                />
+                <span id="help-realm" class="field__help">Only when the gateway asks for a realm.</span>
+              </label>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend class="group__legend">Authentication</legend>
+              <label class="field">
+                <span class="field__label">Username</span>
+                <input
+                  id="field-username"
+                  class="field__input"
+                  type="text"
+                  spellcheck="false"
+                  autocomplete="username"
+                  placeholder="user@example.com"
+                  aria-describedby="help-username error-username"
+                />
+                <span id="help-username" class="field__help">The Microsoft account used for the sign-in.</span>
+                <span id="error-username" class="field__error" role="alert" hidden></span>
+              </label>
+              <label class="field">
+                <span class="field__label">Password</span>
+                <input
+                  id="field-password"
+                  class="field__input"
+                  type="password"
+                  autocomplete="new-password"
+                  placeholder="Leave empty to keep the stored password"
+                  aria-describedby="help-password"
+                />
+                <span id="help-password" class="field__help">Stored on this machine.</span>
+                <span id="password-hint" class="field__hint" hidden>&#8226;&#8226;&#8226;&#8226;&#8226; (saved)</span>
+              </label>
+              <label class="field">
+                <span class="field__label">TOTP secret</span>
+                <input
+                  id="field-totp"
+                  class="field__input"
+                  type="password"
+                  spellcheck="false"
+                  autocomplete="off"
+                  placeholder="Leave empty to keep the stored secret"
+                  aria-describedby="help-totp error-totp"
+                />
+                <span id="help-totp" class="field__help">Base32 secret for the authenticator app.</span>
+                <span id="totp-hint" class="field__hint" hidden>&#8226;&#8226;&#8226;&#8226;&#8226; (saved)</span>
+                <span id="error-totp" class="field__error" role="alert" hidden></span>
+              </label>
+              <fieldset class="subgroup">
+                <legend class="field__label">Authentication method</legend>
+                <label class="choice">
+                  <input id="auth-push" type="radio" name="auth-method" value="push" />
+                  <span>Push notification (Microsoft Authenticator)</span>
+                </label>
+                <label class="choice">
+                  <input id="auth-totp" type="radio" name="auth-method" value="totp" />
+                  <span>TOTP code from the authenticator app</span>
+                </label>
+              </fieldset>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend class="group__legend">Behavior</legend>
+              <label class="choice">
+                <input id="field-headless" type="checkbox" />
+                <span>Run the sign-in browser headless</span>
+              </label>
+              <label class="choice">
+                <input id="field-keep-awake" type="checkbox" />
+                <span>Keep the machine awake while connected</span>
+              </label>
+              <label class="choice">
+                <input id="field-auto-reconnect" type="checkbox" />
+                <span>Reconnect automatically if the tunnel drops</span>
+              </label>
+              <label class="choice">
+                <input id="field-debug-screenshots" type="checkbox" />
+                <span>Save debug screenshots during sign-in</span>
+              </label>
+              <label class="choice">
+                <input id="field-start-at-login" type="checkbox" disabled />
+                <span>Start Fortin when I log in</span>
+                <span id="help-start-at-login" class="choice__help" hidden>Only available in the installed app</span>
+              </label>
+            </fieldset>
+
+            <fieldset class="group">
+              <legend class="group__legend">Advanced</legend>
+              <label class="field">
+                <span class="field__label">Trusted certificate</span>
+                <input
+                  id="field-trusted-cert"
+                  class="field__input"
+                  type="text"
+                  spellcheck="false"
+                  placeholder="any"
+                  aria-describedby="help-cert error-cert"
+                />
+                <span id="help-cert" class="field__help">any, or the sha256 fingerprint of the gateway certificate.</span>
+                <span id="error-cert" class="field__error" role="alert" hidden></span>
+              </label>
+              <label class="field">
+                <span class="field__label">Chrome path</span>
+                <input
+                  id="field-chrome-path"
+                  class="field__input"
+                  type="text"
+                  spellcheck="false"
+                  placeholder="Detected automatically"
+                  aria-describedby="help-chrome"
+                />
+                <span id="help-chrome" class="field__help">Full path to Google Chrome. Leave empty to detect it.</span>
+              </label>
+            </fieldset>
+          </div>
+
+          <div class="form__actions">
+            <button id="settings-save" class="button button--primary" type="submit">Save</button>
+            <span id="settings-message" class="form__message" role="status"></span>
+          </div>
+        </form>
+      </section>
+
+      <footer class="footer">
+        <span class="footer__versions">
+          <span id="version-app">App version unknown</span>
+          <span class="footer__sep">/</span>
+          <span id="version-electron">Electron version unknown</span>
+          <span class="footer__sep">/</span>
+          <span id="version-platform">platform unknown</span>
+        </span>
+        <button id="app-quit" class="button button--small" type="button">Quit</button>
+      </footer>
+    </main>
+
+    <dialog id="credentials-modal" class="modal" aria-labelledby="credentials-title">
+      <form id="credentials-form" class="modal__form">
+        <h2 id="credentials-title" class="modal__title">Password required</h2>
+        <p id="credentials-message" class="modal__message"></p>
+        <p id="credentials-attempt" class="modal__attempt" hidden></p>
+        <div class="field">
+          <label id="credentials-input-label" class="field__label" for="credentials-input">Password</label>
+          <div class="field__row">
+            <input id="credentials-input" class="field__input" type="password" autocomplete="current-password" />
+            <button id="credentials-reveal" class="button button--small" type="button" aria-pressed="false" hidden>
+              Show
+            </button>
+          </div>
+          <span id="credentials-help" class="field__help"></span>
+        </div>
+        <p id="credentials-error" class="modal__error" role="alert" hidden></p>
+        <div class="modal__actions">
+          <button id="credentials-cancel" class="button" type="button">Cancel</button>
+          <button id="credentials-submit" class="button button--primary" type="submit">Submit</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>

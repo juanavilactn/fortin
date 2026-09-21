@@ -1,0 +1,80 @@
+#!/bin/bash
+set -euo pipefail
+
+# Helper restringido para el tunel VPN. Solo acepta connect, stop y version.
+# Se instala como root en /usr/local/libexec/fortin-helper y se invoca
+# desde el usuario sin contrasena a traves de /etc/sudoers.d/fortin.
+
+fail() {
+    printf 'fortin-helper: %s\n' "$1" >&2
+    exit 64
+}
+
+for tool in pgrep ps kill; do
+    command -v "$tool" >/dev/null 2>&1 || fail "required tool not found: $tool"
+done
+
+PGREP="$(command -v pgrep)"
+PS="$(command -v ps)"
+KILL="$(command -v kill)"
+
+if [ -n "${FORTIN_OPENFORTIVPN:-}" ]; then
+    OPENFORTIVPN="$FORTIN_OPENFORTIVPN"
+else
+    OPENFORTIVPN="$(command -v openfortivpn || true)"
+fi
+
+[ -n "$OPENFORTIVPN" ] || fail 'openfortivpn not found'
+[ -x "$OPENFORTIVPN" ] || fail 'openfortivpn is not executable'
+
+case "${1:-}" in
+    connect)
+        [ "$#" -eq 6 ] || fail 'invalid connect arguments'
+
+        server="$2"
+        port="$3"
+        cookie="$4"
+        trusted_cert="$5"
+        realm="$6"
+
+        [[ "$server" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] || fail 'invalid VPN server'
+        [[ "$port" =~ ^[0-9]+$ ]] || fail 'invalid VPN port'
+        [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || fail 'invalid VPN port'
+        [ -n "$cookie" ] && [ "${#cookie}" -le 16384 ] || fail 'invalid VPN cookie'
+        [[ "$trusted_cert" == 'any' || "$trusted_cert" =~ ^[A-Fa-f0-9]{64}$ ]] || fail 'invalid trusted certificate'
+        [ "${#realm}" -le 256 ] || fail 'invalid VPN realm'
+
+        args=(
+            "${server}:${port}"
+            "--cookie=${cookie}"
+            "--trusted-cert=${trusted_cert}"
+        )
+
+        if [ -n "$realm" ]; then
+            args+=("--realm=${realm}")
+        fi
+
+        exec "$OPENFORTIVPN" "${args[@]}"
+        ;;
+
+    stop)
+        [ "$#" -eq 1 ] || fail 'invalid stop arguments'
+
+        while IFS= read -r pid; do
+            [ -n "$pid" ] || continue
+            command_line="$("$PS" -p "$pid" -o command= 2>/dev/null || true)"
+            case "$command_line" in
+                "$OPENFORTIVPN"|"$OPENFORTIVPN "*) "$KILL" -TERM "$pid" ;;
+            esac
+        done < <("$PGREP" -x openfortivpn 2>/dev/null || true)
+        ;;
+
+    version)
+        [ "$#" -eq 1 ] || fail 'invalid version arguments'
+        exec "$OPENFORTIVPN" --version
+        ;;
+
+    *)
+        fail 'expected connect, stop, or version'
+        ;;
+esac
