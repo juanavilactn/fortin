@@ -450,8 +450,8 @@ SYSTEM scheduled task is possible, but it is not implemented.
 checkout. `npm test` runs the automated suite: it checks the contract of `src/core/api.js` against
 the channel list of `src/main/preload.cjs` and the command table of `src/cli.js`, plus the core
 modules that need no network. Authenticating drives a real browser against Microsoft and the tunnel
-needs a real gateway, so the end-to-end flow is verified by hand against a live VPN: the pending
-evidence of every capability is listed in [PARITY.md](PARITY.md).
+needs a real gateway, so the end-to-end flow is verified by hand against a live VPN. That evidence
+belongs to the development notes of the project and is not part of this repository.
 
 A real run, from the app log:
 
@@ -475,8 +475,8 @@ The setup assistant was verified against the real application started from the c
 of `test/doubles` (`FCVPN_FAKE_PROVIDER=1`), a temporary `HOME` and a temporary `FORTIN_CONFIG`, and
 the window driven over CDP: a clean profile opens the assistant, the eight steps write what they promise,
 the second start does not open it again, `Later` leaves the banner and no assistant after a restart, and
-`doctor` reports the answer. The exact steps, the observed output and the screenshots are in
-[PARITY.md](PARITY.md).
+`doctor` reports the answer. The exact steps, the observed output and the screenshots stay in the
+development notes.
 
 ## Known limits
 
