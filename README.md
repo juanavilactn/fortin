@@ -60,7 +60,7 @@ Without Homebrew, download the disk image from the
 "/Applications/Fortin.app/Contents/Resources/cli/fortin" cli install
 ```
 
-The same page carries the AppImage and the deb for Linux, and the NSIS installer for Windows.
+The releases page carries the macOS disk images. Linux and Windows have build targets in the repository, but no published build yet.
 
 ## Requirements
 
