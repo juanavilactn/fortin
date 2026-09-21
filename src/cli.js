@@ -147,24 +147,47 @@ function emitError(command, error) {
 
 /* --------------------------------------------------------------- secret input */
 
-/** First line of a stream, without waiting for the end of it. */
+/**
+ * First line of a stream: what arrives before the first newline, or the whole
+ * input when the writer closes it without one. `printf %s "$VALUE"` is the
+ * natural way to send a secret down a pipe, so an input without a trailing
+ * newline carries a value like any other. A reader that only resolved on a
+ * newline dropped that value and left the command silent.
+ */
 function readFirstLine(stream = process.stdin) {
   return new Promise((resolve, reject) => {
     let data = '';
+    let settled = false;
+
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      stream.off('data', onData);
+      stream.off('end', onEnd);
+      stream.off('error', onError);
+      resolve(value);
+    };
+
     const onData = (chunk) => {
       data += String(chunk);
       const index = data.indexOf('\n');
-      if (index !== -1) {
-        stream.off('data', onData);
-        stream.off('error', onError);
-        resolve(data.slice(0, index).replace(/\r$/, ''));
-      }
+      if (index !== -1) finish(data.slice(0, index).replace(/\r$/, ''));
     };
+
+    // The writer closed the input: what arrived is the whole value.
+    const onEnd = () => finish(data.replace(/\r$/, ''));
+
     const onError = (error) => {
+      if (settled) return;
+      settled = true;
       stream.off('data', onData);
+      stream.off('end', onEnd);
+      stream.off('error', onError);
       reject(error);
     };
+
     stream.on('data', onData);
+    stream.on('end', onEnd);
     stream.on('error', onError);
     stream.resume?.();
   });

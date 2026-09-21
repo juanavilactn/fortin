@@ -189,6 +189,28 @@ test('secrets set reads the value from the standard input, status reports it and
   );
 });
 
+test('secrets set takes the value of a pipe that closes without a newline', () => {
+  const box = sandbox();
+
+  // `printf %s "$VALUE"` is the natural way to send a secret from a script. The
+  // reader used to wait for a newline that never arrives, so the value was lost.
+  const set = runCli(box, ['secrets', 'set', 'password', '--json'], { input: 'store-pass' });
+
+  assert.equal(jsonOf(set).command, 'secrets set');
+  assert.equal(readJson(box.storeFile).password, 'store-pass', 'the value went to the store');
+});
+
+test('secrets set refuses an empty input instead of staying silent', () => {
+  const box = sandbox();
+
+  const empty = runCli(box, ['secrets', 'set', 'password', '--json'], { input: '' });
+
+  assert.equal(empty.status, 1, empty.stdout);
+  const document = JSON.parse(empty.stdout);
+  assert.equal(document.ok, false);
+  assert.match(document.error.message, /No value received/);
+});
+
 test('logs --json reads the current log file', () => {
   const box = sandbox();
   const latest = path.join(box.home, '.fortin', 'logs', 'latest.log');
