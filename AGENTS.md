@@ -66,8 +66,8 @@ fortin status --json
 ```
 
 `config set` refuses `password` and `totpSecret` on purpose: an argument is visible in `ps` and in a
-shell history. Keep the trailing newline of the two `printf` calls. Build 1.0.0 drops a value whose
-pipe closes without one, and the fix is in this repository.
+shell history. `secrets set` takes the first line of the input, or the whole input when the pipe
+closes without a newline, so `printf '%s\n' "$VALUE"` and `printf %s "$VALUE"` both work.
 
 The secrets live in the system store (the macOS Keychain, `secret-tool` on Linux) or, on a machine
 without one, in `~/.fortin/config.json` with mode 0600. `fortin secrets status` says which secrets
