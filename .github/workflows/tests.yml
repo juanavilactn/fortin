@@ -18,8 +18,9 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # The version package.json declares as the minimum, so the job
-          # proves that floor instead of a moving one.
-          node-version: "22.12.0"
+          # proves that floor instead of a moving one. It is the release that
+          # adds module.registerHooks(), which the test doubles use.
+          node-version: "22.15.0"
           cache: npm
       # The tests run on the doubles of the three platforms, so the Electron
       # binary is not needed: the lifecycle scripts stay off and the download

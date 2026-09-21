@@ -9,7 +9,6 @@
  *
  * Outputs, all with a transparent background and a flat design that stays
  * legible at 16 px:
- *   assets/icon.png                  1024x1024
  *   assets/tray-<state>.png          16  (base file, Electron resolves @2x/@3x)
  *   assets/tray-<state>@2x.png       32
  *   assets/tray-<state>@3x.png       48
@@ -20,8 +19,9 @@
  *
  * The tray glyph is a filled shield in a saturated per-state colour with a
  * white glyph inside, so it stays visible on both light and dark menubars.
- * The application icon is a padlock on the blue gradient, with a merlon on
- * each top corner of the body.
+ *
+ * assets/icon.png, the 1024x1024 image of the application, is not generated
+ * here: it is a designed asset and this script never rewrites it.
  */
 
 import fs from 'node:fs';
@@ -119,28 +119,6 @@ function inSegment(x, y, ax, ay, bx, by, half) {
 function inShield(x, y) {
   if (inRoundedRect(x, y, 0.1, 0.1, 0.9, 0.7, 0.13)) return true;
   return y >= 0.6 && inSuperEllipse(x, y, 0.5, 0.62, 0.4, 0.34, 2.6);
-}
-
-/**
- * Padlock of the application icon. The body carries a merlon on each top
- * corner, so the lock reads as the small fort of the name as well.
- */
-function inLockBody(x, y) {
-  return (
-    inRoundedRect(x, y, 0.22, 0.42, 0.78, 0.84, 0.045) ||
-    inRoundedRect(x, y, 0.22, 0.29, 0.32, 0.44, 0) ||
-    inRoundedRect(x, y, 0.68, 0.29, 0.78, 0.44, 0)
-  );
-}
-
-/** Shackle of the padlock: a ring, cut where it enters the body. */
-function inShackle(x, y) {
-  return y <= 0.43 && inDisc(x, y, 0.5, 0.43, 0.105) && !inDisc(x, y, 0.5, 0.43, 0.062);
-}
-
-/** Keyhole cut into the body of the padlock. */
-function inKeyhole(x, y) {
-  return inDisc(x, y, 0.5, 0.56, 0.05) || inRoundedRect(x, y, 0.47, 0.56, 0.53, 0.71, 0.015);
 }
 
 function inCheck(x, y) {
@@ -250,25 +228,6 @@ function trayLayers(state) {
   ];
 }
 
-/** Background gradient of the application icon, from a light blue to a deeper one. */
-const ICON_BACKGROUND = (u, v) => [
-  0x3b + (0x1d - 0x3b) * v,
-  0x82 + (0x4e - 0x82) * v,
-  0xf6 + (0xd8 - 0xf6) * v,
-];
-
-/** Inside of the padlock, darker than any point of the background gradient. */
-const LOCK_BLUE = [0x1e, 0x3a, 0x8a];
-
-function appIconLayers() {
-  return [
-    { shape: (x, y) => inRoundedRect(x, y, 0.06, 0.06, 0.94, 0.94, 0.21), rgb: ICON_BACKGROUND },
-    { shape: inShackle, rgb: WHITE },
-    { shape: inLockBody, rgb: WHITE },
-    { shape: inKeyhole, rgb: LOCK_BLUE },
-  ];
-}
-
 /* ----------------------------------------------------------------------- main */
 
 function write(fileName, buffer) {
@@ -295,8 +254,6 @@ function main() {
       written.push({ ...write(`tray-${state}${suffix}.png`, render(size, layers)), size });
     }
   }
-
-  written.push({ ...write('icon.png', render(1024, appIconLayers())), size: 1024 });
 
   for (const { target, size, bytes } of written) {
     process.stdout.write(`${size}x${size}  ${String(bytes).padStart(7)} bytes  ${path.relative(process.cwd(), target)}\n`);

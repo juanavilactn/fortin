@@ -68,7 +68,8 @@ Settings names the store that holds them.
 
 ## Requirements
 
-- Node.js 22.12 or newer to run from source, and for the CLI.
+- Node.js 22.15 or newer to run from source, for the CLI and for the tests, which load the doubles
+  of the three platforms with `module.registerHooks()`.
 - Google Chrome (or Chromium) installed. The app drives a real browser so the Microsoft login
   looks like a normal browser session. Set `chromePath` in the configuration, or `CHROME_PATH` in
   the environment, when Chrome lives somewhere unusual.
