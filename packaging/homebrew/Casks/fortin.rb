@@ -4,12 +4,12 @@ cask "fortin" do
   # One disk image per architecture. scripts/update-cask.mjs of the application
   # writes the version and the two checksums, so they follow every release.
   on_arm do
-    sha256 "8a175c3d3c9634229a193a234ca4ad8729472a41c71f749005e0ae3e5c60f0af"
+    sha256 "4cddb0b6ba4bf9b7a69c55401267c6a389ad844e34bc48081cf051b220c2620d"
 
     url "https://github.com/juanavilactn/fortin/releases/download/v#{version}/Fortin-#{version}-arm64.dmg"
   end
   on_intel do
-    sha256 "e1471b8fa1824dffd98cb44856055a836ab8232eb2dd233691db0942d8b4f638"
+    sha256 "371f9b11ce824a6fc4e2ff893a98100605a7f1a8193a41a937e41f6ddfaa2423"
 
     url "https://github.com/juanavilactn/fortin/releases/download/v#{version}/Fortin-#{version}-x64.dmg"
   end
