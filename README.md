@@ -7,6 +7,20 @@ and TOTP both work as the second factor.
 
 Fortin is not affiliated with, endorsed by or supported by Fortinet.
 
+## Screenshots
+
+The window with the tunnel up, and the activity log it writes:
+
+![The Fortin window, connected, with the activity log](docs/screenshots/window-activity.png)
+
+Settings holds every field of the configuration:
+
+![The Settings pane of the Fortin window](docs/screenshots/window-settings.png)
+
+The first start walks through the setup assistant:
+
+![The first step of the setup assistant](docs/screenshots/setup-welcome.png)
+
 ## Install
 
 Homebrew is the shortest path:
