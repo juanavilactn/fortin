@@ -67,9 +67,10 @@ The releases page carries the macOS disk images. Linux and Windows have build ta
 - Google Chrome or Chromium. The application drives a real browser, so the Microsoft sign-in looks
   like a normal session. Set `chromePath` in the settings, or `CHROME_PATH` in the environment, when
   Chrome lives somewhere unusual.
-- `openfortivpn`. The macOS helper installer brings its own copy. On Debian and Ubuntu, install it
-  with `sudo apt install openfortivpn`. On Windows, you need `openfortivpn.exe` plus the TAP-Windows
-  adapter.
+- `openfortivpn`. Install it before the helper on macOS: the installer copies the binary it finds in
+  the PATH, with its OpenSSL libraries, into `/usr/local/libexec/fortin`, so the tunnel does not
+  depend on the Homebrew prefix. On Debian and Ubuntu, `sudo apt install openfortivpn`. On Windows,
+  you need `openfortivpn.exe` plus the TAP-Windows adapter.
 - One administrator confirmation, the first time, to install the privileged helper.
 
 ## First run
