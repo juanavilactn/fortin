@@ -16,14 +16,22 @@ hands it to the tunnel.
 Homebrew is the shortest path:
 
 ```bash
-brew tap juanavilactn/tap
-brew install --cask fortin
+brew install --cask juanavilactn/tap/fortin
 fortin status
 ```
 
 The cask installs `Fortin.app` in `/Applications` and links the `fortin` command into the `bin`
 directory of Homebrew, which a new terminal already searches, so no `cli install` step is needed.
 `fortin status` answers from the installed bundle.
+
+Homebrew 7 refuses to load the cask of a third-party tap by its bare name until the tap is trusted.
+A session that taps first and then runs `brew install --cask fortin` needs one more command:
+
+```bash
+brew tap juanavilactn/tap
+brew trust juanavilactn/tap
+brew install --cask fortin
+```
 
 The application is signed ad-hoc and it is not notarized, so macOS puts the download in quarantine
 and the first start ends with a message about an unidentified developer. Approve it once in System
@@ -32,6 +40,8 @@ Settings, Privacy and Security, "Open Anyway", or drop the flag from a terminal:
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Fortin.app"
 ```
+
+The command runs the binary of the same bundle, so that one flag covers both.
 
 The first start opens the setup assistant, which walks through the gateway, the account, the
 authentication method and the privileged helper in eight steps, and leaves the app ready to

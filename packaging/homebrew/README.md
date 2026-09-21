@@ -4,8 +4,7 @@ The cask of [Fortin](https://github.com/juanavilactn/fortin), a desktop applicat
 line tool that connects to FortiClient SSL VPN gateways with SAML authentication.
 
 ```bash
-brew tap juanavilactn/tap
-brew install --cask fortin
+brew install --cask juanavilactn/tap/fortin
 fortin status
 ```
 
@@ -13,6 +12,10 @@ The cask installs `Fortin.app` into `/Applications` and links the `fortin` comma
 into the `bin` directory of Homebrew, so the command is in the `PATH` without an extra step. The
 first start opens the setup assistant, which installs the privileged helper and asks for the
 administrator password once.
+
+Homebrew 7 refuses to load the cask of a third-party tap by its bare name until the tap is trusted.
+Tap first and then run `brew trust juanavilactn/tap`, or install with the fully qualified name of
+the command above.
 
 The application is signed ad-hoc and it is not notarized. macOS therefore keeps it in quarantine
 and the first start ends with a message about an unidentified developer: approve it in System

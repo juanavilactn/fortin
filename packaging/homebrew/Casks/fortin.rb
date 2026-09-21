@@ -24,7 +24,7 @@ cask "fortin" do
     strategy :github_latest
   end
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "Fortin.app"
   binary "#{appdir}/Fortin.app/Contents/Resources/cli/fortin"
