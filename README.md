@@ -288,6 +288,31 @@ npm start
 Node.js 22.15 or newer. The command line works from a checkout without Electron
 (`node src/cli.js help`), and `npm test` runs the suite.
 
+## Releases
+
+A push to `main` that changes `package.json.version` publishes that version after the tests pass.
+Use a stable `X.Y.Z` version and update the lockfile with it:
+
+```bash
+npm version patch --no-git-tag-version --ignore-scripts
+```
+
+Use `minor` or `major` instead of `patch` when appropriate, and include both `package.json` and
+`package-lock.json` in the change. CI creates the `vX.Y.Z` tag at the tested commit. The workflow
+in [`.github/workflows/tests.yml`](.github/workflows/tests.yml) builds macOS Apple Silicon and Intel
+DMG and ZIP files, adds `SHA256SUMS`, and keeps the release as a draft until all assets are ready.
+The application remains signed ad-hoc and is not notarized.
+
+After publication, CI downloads the two public disk images and updates the cask in this repository
+and in [`juanavilactn/homebrew-tap`](https://github.com/juanavilactn/homebrew-tap) with their checksums.
+This requires the `HOMEBREW_TAP_DEPLOY_KEY` repository secret; see the
+[Homebrew release setup](packaging/homebrew/README.md#release-setup).
+
+If a release run fails, fix the reported problem and rerun the failed GitHub Actions execution
+without changing the version. A retry skips building and publishing an already public release,
+leaves its assets intact, and can finish the Homebrew update. A missing tap secret fails the
+Homebrew job with an explanation; the release may already be public by then.
+
 ## License
 
 MIT.

@@ -8,9 +8,13 @@ on:
 permissions:
   contents: read
 
+env:
+  npm_config_ignore_scripts: "true"
+
 jobs:
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       # Every action is pinned to the commit of its release, not to a moving
       # tag: the runner executes exactly this code, and an update is a diff.
@@ -27,3 +31,103 @@ jobs:
       # of that binary is skipped.
       - run: npm ci --ignore-scripts
       - run: npm test
+
+  prepare-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.plan.outputs.changed }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.15.0"
+      - name: Detect a version change across the push
+        id: plan
+        run: node scripts/release.mjs plan
+
+  release:
+    needs: [test, prepare-release]
+    if: needs.prepare-release.outputs.changed == 'true'
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    # Publish one version at a time without dropping queued version changes.
+    concurrency:
+      group: fortin-release
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.15.0"
+          cache: npm
+      - name: Check whether this version is already public
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs inspect
+      - if: steps.existing.outputs.published != 'true'
+        run: npm ci --ignore-scripts
+      - if: steps.existing.outputs.published != 'true'
+        run: node node_modules/electron/install.js
+      - name: Build the Apple Silicon and Intel packages
+        if: steps.existing.outputs.published != 'true'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:mac -- --publish never
+      - name: Publish the complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs publish
+
+  homebrew:
+    needs: [prepare-release, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.15.0"
+      - name: Check access to the Homebrew tap
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          if [ -z "$TAP_DEPLOY_KEY" ]; then
+            echo '::error::Set HOMEBREW_TAP_DEPLOY_KEY with a write-enabled deploy key for juanavilactn/homebrew-tap, then rerun the failed jobs.'
+            exit 1
+          fi
+      - name: Check out the Homebrew tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: juanavilactn/homebrew-tap
+          ref: main
+          path: homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+      - name: Download and verify the published disk images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs download
+      - name: Generate the cask from the published images
+        run: node scripts/update-cask.mjs
+      - name: Update the cask in Fortin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/sync-cask.mjs --repo "$GITHUB_REPOSITORY" --path packaging/homebrew/Casks/fortin.rb
+      - name: Update the Homebrew tap
+        run: node scripts/sync-cask.mjs --checkout homebrew-tap --path Casks/fortin.rb
