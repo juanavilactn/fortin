@@ -8,7 +8,6 @@ cask "fortin" do
 
     url "https://github.com/juanavilactn/fortin/releases/download/v#{version}/Fortin-#{version}-arm64.dmg"
   end
-
   on_intel do
     sha256 "997854d5e69c5fb1c6ab0d387e2047b5d80a8baa1a0029b20446eb311211467f"
 
